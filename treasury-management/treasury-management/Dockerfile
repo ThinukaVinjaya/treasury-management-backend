@@ -1,14 +1,15 @@
-# Use Eclipse Temurin (recommended & actively maintained)
-FROM eclipse-temurin:21-jdk
+# Step 1: Build stage
+FROM maven:3.9.9-eclipse-temurin-17 AS builder
 
-# Set working directory
 WORKDIR /app
+COPY . .
+RUN mvn clean package -DskipTests
 
-# Copy the built JAR file
-COPY target/treasury-management-0.0.1-SNAPSHOT.jar app.jar
+# Step 2: Run stage
+FROM openjdk:17-jdk-slim
 
-# Expose port
+WORKDIR /app
+COPY --from=builder /app/target/*.jar app.jar
+
 EXPOSE 8080
-
-# Run the Spring Boot app
 ENTRYPOINT ["java", "-jar", "app.jar"]
