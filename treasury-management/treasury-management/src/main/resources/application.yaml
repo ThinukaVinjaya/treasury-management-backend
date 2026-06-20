@@ -4,14 +4,19 @@ spring:
 
   datasource:
     url: ${DATABASE_URL}
+    driver-class-name: org.postgresql.Driver
     hikari:
       connection-timeout: 30000
       maximum-pool-size: 5
+      minimum-idle: 1
+      idle-timeout: 600000
+      max-lifetime: 1800000
 
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: false
+    open-in-view: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -20,7 +25,7 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username: ${MAIL_USERNAME:cst19treasurysystem@gmail.com}
+    username: ${MAIL_USERNAME}
     password: ${MAIL_PASSWORD}
     properties:
       mail:
@@ -33,15 +38,18 @@ app:
   default-monthly-contribution: 200
 
 server:
-  port: ${SERVER_PORT:10000}
+  port: ${PORT:10000}
 
-# JWT & Cloudinary (keep as before)
 jwt:
   secret: ${JWT_SECRET}
   expiration: 86400000
 
-# ===================== Cloudinary =====================
 cloudinary:
-  cloud-name: ${CLOUDINARY_CLOUD_NAME:dpxsp2d9c}
+  cloud-name: ${CLOUDINARY_CLOUD_NAME}
   api-key: ${CLOUDINARY_API_KEY}
   api-secret: ${CLOUDINARY_API_SECRET}
+
+logging:
+  level:
+    org.springframework.security: INFO
+    org.hibernate.SQL: WARN
