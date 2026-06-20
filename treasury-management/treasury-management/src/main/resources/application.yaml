@@ -6,7 +6,7 @@ spring:
   datasource:
     url: jdbc:postgresql://ep-orange-brook-ai92s2ba.c-4.us-east-1.aws.neon.tech/treasury_db?sslmode=require
     username: neondb_owner
-    password: npg_w0EcIXAtjLR9
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
     hikari:
