@@ -85,13 +85,16 @@ public class ContributionService {
         User currentUser = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        if ("SUPER_ADMIN".equals(currentUser.getRole())) return;
+        // SUPER_ADMIN and TREASURER can access ALL events
+        if ("SUPER_ADMIN".equals(currentUser.getRole()) || "TREASURER".equals(currentUser.getRole())) {
+            return;
+        }
 
-        boolean isMain = currentUser.getId().equals(event.getTreasurerId());
+        // Temporary Treasurer can only access his assigned event
         boolean isTemp = event.getTemporaryTreasurerId() != null &&
                 currentUser.getId().equals(event.getTemporaryTreasurerId());
 
-        if (!isMain && !isTemp) {
+        if (!isTemp) {
             throw new AccessDeniedException("You are not authorized for this event.");
         }
     }

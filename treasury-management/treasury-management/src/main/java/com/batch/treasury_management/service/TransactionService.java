@@ -43,7 +43,6 @@ public class TransactionService {
                                                  MultipartFile file,
                                                  String uploadedBy) throws IOException {
 
-        // Temporary Treasurer Permission Check - FIXED
         if (request.getEventId() != null && !request.getEventId().isBlank()) {
             validateTemporaryTreasurerPermission(request.getEventId(), uploadedBy);
         }
@@ -77,9 +76,6 @@ public class TransactionService {
         return mapToResponse(saved);
     }
 
-    /**
-     * FIXED: Better Temporary Treasurer Validation
-     */
     private void validateTemporaryTreasurerPermission(String eventId, String username) {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResourceNotFoundException("Event not found"));
@@ -87,17 +83,18 @@ public class TransactionService {
         User currentUser = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        if ("SUPER_ADMIN".equals(currentUser.getRole())) {
+        // SUPER_ADMIN and TREASURER can access ALL events
+        if ("SUPER_ADMIN".equals(currentUser.getRole()) || "TREASURER".equals(currentUser.getRole())) {
             return;
         }
 
-        boolean isMainTreasurer = currentUser.getId().equals(event.getTreasurerId());
+        // Temporary Treasurer can only access his assigned event
         boolean isTempTreasurer = event.getTemporaryTreasurerId() != null &&
                 currentUser.getId().equals(event.getTemporaryTreasurerId());
 
-        if (!isMainTreasurer && !isTempTreasurer) {
+        if (!isTempTreasurer) {
             throw new AccessDeniedException("You are not authorized for this event. " +
-                    "Only the assigned Treasurer or Temporary Treasurer can manage it.");
+                    "Only the assigned Treasurer, Temporary Treasurer or Super Admin can manage it.");
         }
     }
 
@@ -119,8 +116,6 @@ public class TransactionService {
 
         auditService.logAction("SOFT_DELETE_TRANSACTION", "TRANSACTION", id, deletedBy,
                 "Deleted " + transaction.getType() + " | Amount: " + transaction.getAmount());
-
-        System.out.println("✅ Transaction soft deleted successfully.");
     }
 
     @Transactional
@@ -184,7 +179,6 @@ public class TransactionService {
         return response;
     }
 
-    // For ReportService
     public List<TransactionResponse> getMainFundTransactionsByMonth(YearMonth month) {
         LocalDate start = month.atDay(1);
         LocalDate end = month.atEndOfMonth();
