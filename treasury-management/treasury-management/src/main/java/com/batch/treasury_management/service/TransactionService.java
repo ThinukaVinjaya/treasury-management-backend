@@ -43,8 +43,8 @@ public class TransactionService {
                                                  MultipartFile file,
                                                  String uploadedBy) throws IOException {
 
-        // Temporary Treasurer Permission Check
-        if (request.getEventId() != null) {
+        // Temporary Treasurer Permission Check - FIXED
+        if (request.getEventId() != null && !request.getEventId().isBlank()) {
             validateTemporaryTreasurerPermission(request.getEventId(), uploadedBy);
         }
 
@@ -67,7 +67,6 @@ public class TransactionService {
 
         Transaction saved = transactionRepository.save(transaction);
 
-        // Update balance immediately
         if (saved.getEventId() != null) {
             updateEventBalance(saved.getEventId());
         }
@@ -78,6 +77,9 @@ public class TransactionService {
         return mapToResponse(saved);
     }
 
+    /**
+     * FIXED: Better Temporary Treasurer Validation
+     */
     private void validateTemporaryTreasurerPermission(String eventId, String username) {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResourceNotFoundException("Event not found"));
@@ -90,16 +92,15 @@ public class TransactionService {
         }
 
         boolean isMainTreasurer = currentUser.getId().equals(event.getTreasurerId());
-        boolean isTempTreasurer = currentUser.getId().equals(event.getTemporaryTreasurerId());
+        boolean isTempTreasurer = event.getTemporaryTreasurerId() != null &&
+                currentUser.getId().equals(event.getTemporaryTreasurerId());
 
         if (!isMainTreasurer && !isTempTreasurer) {
-            throw new AccessDeniedException("You are not authorized to create transactions for this event");
+            throw new AccessDeniedException("You are not authorized for this event. " +
+                    "Only the assigned Treasurer or Temporary Treasurer can manage it.");
         }
     }
 
-    /**
-     * ✅ SOFT DELETE TRANSACTION WITH BALANCE UPDATE
-     */
     @Transactional
     public void softDeleteTransaction(String id, String deletedBy) {
         Transaction transaction = transactionRepository.findById(id)
@@ -109,27 +110,19 @@ public class TransactionService {
             throw new IllegalStateException("Transaction is already deleted");
         }
 
-        // Perform soft delete
         transaction.softDelete();
         transactionRepository.save(transaction);
 
-        // Update balance
         if (transaction.getEventId() != null) {
             updateEventBalance(transaction.getEventId());
         }
-        // For Main Fund, DashboardService will automatically reflect changes on next load
 
-        // Audit Log
         auditService.logAction("SOFT_DELETE_TRANSACTION", "TRANSACTION", id, deletedBy,
-                "Deleted " + transaction.getType() + " transaction | Amount: " + transaction.getAmount() +
-                        " | Title: " + transaction.getTitle());
+                "Deleted " + transaction.getType() + " | Amount: " + transaction.getAmount());
 
-        System.out.println("✅ Transaction soft deleted successfully. Balance updated.");
+        System.out.println("✅ Transaction soft deleted successfully.");
     }
 
-    /**
-     * ✅ Update Event Balance
-     */
     @Transactional
     public void updateEventBalance(String eventId) {
         Event event = eventRepository.findById(eventId)
@@ -160,7 +153,6 @@ public class TransactionService {
         return mapToResponse(t);
     }
 
-    // ==================== PAGINATION METHODS ====================
     public Page<TransactionResponse> getMainFundTransactionsPaginated(Pageable pageable) {
         return transactionRepository.findByEventIdIsNullAndIsDeletedFalse(pageable)
                 .map(this::mapToResponse);
@@ -176,7 +168,6 @@ public class TransactionService {
                 .map(this::mapToResponse);
     }
 
-    // ==================== MAPPER ====================
     private TransactionResponse mapToResponse(Transaction t) {
         TransactionResponse response = new TransactionResponse();
         response.setId(t.getId());
@@ -193,14 +184,7 @@ public class TransactionService {
         return response;
     }
 
-    // Legacy methods for ReportService
-    public List<TransactionResponse> getMainFundTransactions() {
-        return transactionRepository.findByEventIdIsNullAndIsDeletedFalse()
-                .stream()
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
-    }
-
+    // For ReportService
     public List<TransactionResponse> getMainFundTransactionsByMonth(YearMonth month) {
         LocalDate start = month.atDay(1);
         LocalDate end = month.atEndOfMonth();

@@ -14,24 +14,30 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/admin/users")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('SUPER_ADMIN')")
 public class UserController {
 
     private final UserService userService;
 
     /**
-     * ✅ SUPER_ADMIN - Create New User (Treasurer or User)
+     * ✅ SUPER_ADMIN only - Create New User
      */
     @PostMapping
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<UserResponse>> createUser(@RequestBody UserRequest request) {
         UserResponse response = userService.createUserResponse(request);
         return ResponseEntity.ok(ApiResponse.success("User created successfully", response));
     }
 
+    /**
+     * ✅ TREASURER + SUPER_ADMIN - Get All Users
+     */
     @GetMapping
+    @PreAuthorize("hasAnyRole('TREASURER', 'SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<Page<UserResponse>>> getAllUsers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
@@ -42,12 +48,20 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success("Users fetched successfully", users));
     }
 
+    /**
+     * ✅ SUPER_ADMIN only - Get Single User
+     */
     @GetMapping("/{id}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<UserResponse>> getUser(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success("User fetched successfully", userService.getUserById(id)));
     }
 
+    /**
+     * ✅ SUPER_ADMIN only - Soft Delete User
+     */
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<String>> softDeleteUser(@PathVariable String id,
                                                               Authentication authentication) {
         String deletedBy = authentication.getName();
@@ -55,10 +69,14 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success("User soft deleted successfully"));
     }
 
+    /**
+     * ✅ SUPER_ADMIN only - Reset User Password
+     */
     @PostMapping("/{id}/reset-password")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<String>> resetUserPassword(
             @PathVariable String id,
-            @RequestBody java.util.Map<String, String> request) {
+            @RequestBody Map<String, String> request) {
 
         String newPassword = request.get("newPassword");
 

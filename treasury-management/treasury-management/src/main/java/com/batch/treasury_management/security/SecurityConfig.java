@@ -24,7 +24,7 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final RateLimitingFilter rateLimitingFilter;
     private final ForcePasswordChangeFilter forcePasswordChangeFilter;
-    private final CustomUserDetailsService customUserDetailsService;   // ← Important
+    private final CustomUserDetailsService customUserDetailsService;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -36,15 +36,16 @@ public class SecurityConfig {
                         // Public endpoints
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/files/**").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
 
-                        // User endpoints
+                        // User endpoints (including temporary treasurer who has USER role)
                         .requestMatchers("/api/user/**").hasAnyRole("USER", "TREASURER", "SUPER_ADMIN")
 
-                        // Treasurer endpoints
-                        .requestMatchers("/api/treasurer/**").hasAnyRole("TREASURER", "SUPER_ADMIN")
+                        // Treasurer endpoints - Allow USER role for temporary treasurers
+                        .requestMatchers("/api/treasurer/**").hasAnyRole("USER", "TREASURER", "SUPER_ADMIN")
 
                         // Admin endpoints
-                        .requestMatchers("/api/admin/**").hasRole("SUPER_ADMIN")
+                        .requestMatchers("/api/admin/**").hasAnyRole( "TREASURER","SUPER_ADMIN")
 
                         // Any other request must be authenticated
                         .anyRequest().authenticated()
@@ -60,7 +61,7 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(12);   // Stronger strength
+        return new BCryptPasswordEncoder(12);
     }
 
     @Bean

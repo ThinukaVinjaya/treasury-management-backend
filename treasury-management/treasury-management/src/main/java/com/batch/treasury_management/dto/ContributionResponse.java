@@ -15,4 +15,14 @@ public class ContributionResponse {
     private boolean isPaid;
     private String eventId;
     private Date createdAt;
+
+    private String transactionId;
+
+    public String getTransactionId() {
+        return transactionId;
+    }
+
+    public void setTransactionId(String transactionId) {
+        this.transactionId = transactionId;
+    }
 }

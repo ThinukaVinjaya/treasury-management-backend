@@ -1,12 +1,12 @@
 package com.batch.treasury_management.service;
 
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
 import java.util.List;
 
 @Service
@@ -96,30 +96,41 @@ public class EmailService {
         sendHtmlBroadcast(toList, subject, text);
     }
 
+    /**
+     * Monthly Contribution Reminder
+     */
     public void sendContributionReminder(String to, String fullName, String month) {
-        String message = "Dear " + fullName + ",<br><br>" +
-                "This is a friendly reminder that your monthly contribution for <strong>" + month +
-                "</strong> is still pending.<br><br>" +
-                "Please make the payment at the earliest possible.<br><br>" +
-                "Thank you for your continued support!<br><br>" +
-                "Best Regards,<br>University Batch Treasury Team";
+        String subject = "📢 Monthly Contribution Reminder - " + month;
 
-        sendHtmlEmail(to, "📢 Contribution Reminder - " + month, message);
+        String message = """
+            Dear <b>%s</b>,<br><br>
+            This is a friendly reminder that your monthly contribution for <strong>%s</strong> is still pending.<br><br>
+            <b>Amount: Rs. 200</b><br><br>
+            Please make the payment at the earliest possible.<br><br>
+            Thank you for your continued support!<br><br>
+            Best Regards,<br>
+            University Batch Treasury Team
+            """.formatted(fullName, month);
+
+        sendHtmlEmail(to, subject, message);
     }
 
+    /**
+     * Forgot Password OTP
+     */
     public void sendForgotPasswordOtp(String to, String fullName, String otp) {
         String subject = "🔑 Forgot Password Verification Code";
 
         String htmlContent = """
-        <h2>Forgot Password Request</h2>
-        <p>Dear <b>%s</b>,</p>
-        <p>Your password reset verification code is:</p>
-        <h1 style="color:#006400; font-size:32px; letter-spacing:4px;">%s</h1>
-        <p>This code is valid for <b>10 minutes</b>.</p>
-        <p>If you did not request this, please ignore this email.</p>
-        <br>
-        <p>Best Regards,<br>University Batch Treasury Team</p>
-        """.formatted(fullName, otp);
+            <h2>Forgot Password Request</h2>
+            <p>Dear <b>%s</b>,</p>
+            <p>Your password reset verification code is:</p>
+            <h1 style="color:#006400; font-size:32px; letter-spacing:8px;">%s</h1>
+            <p>This code is valid for <b>10 minutes</b>.</p>
+            <p>If you did not request this, please ignore this email.</p>
+            <br>
+            <p>Best Regards,<br>University Batch Treasury Team</p>
+            """.formatted(fullName, otp);
 
         sendHtmlEmail(to, subject, htmlContent);
     }

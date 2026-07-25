@@ -65,7 +65,7 @@ public class ReportService {
             document.add(createPaidTable(report.getPaidContributions()));
 
             document.add(new Paragraph(" "));
-            document.add(new Paragraph("⏳ UNPAID MEMBERS", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14)));
+            document.add(new Paragraph("⏳ UNPAID / NOT GENERATED MEMBERS", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14)));
             document.add(createUnpaidTable(report.getUnpaidUsers()));
 
             document.close();
@@ -76,7 +76,7 @@ public class ReportService {
         return out.toByteArray();
     }
 
-    // ===================== PIVOT CONTRIBUTION REPORT (Months as Columns) =====================
+    // ===================== PIVOT REPORT =====================
     public byte[] generateAllUsersContributionReport(YearMonth startMonth, YearMonth endMonth, String userId) {
         Document document = new Document(PageSize.A4.rotate());
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -100,7 +100,6 @@ public class ReportService {
             document.add(new Paragraph("Generated on: " + new java.util.Date()));
             document.add(new Paragraph(" "));
 
-            // Generate months list
             List<YearMonth> months = new ArrayList<>();
             YearMonth current = startMonth;
             while (!current.isAfter(endMonth)) {
@@ -108,7 +107,6 @@ public class ReportService {
                 current = current.plusMonths(1);
             }
 
-            // Dynamic columns: Username + FullName + Months
             int numColumns = 2 + months.size();
             PdfPTable table = new PdfPTable(numColumns);
             table.setWidthPercentage(100);
@@ -119,7 +117,6 @@ public class ReportService {
             for (int i = 2; i < numColumns; i++) widths[i] = 15f;
             table.setWidths(widths);
 
-            // Header Row
             Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12);
             table.addCell(new Phrase("Username", headerFont));
             table.addCell(new Phrase("Full Name", headerFont));
@@ -128,7 +125,6 @@ public class ReportService {
                 table.addCell(new Phrase(m.toString(), headerFont));
             }
 
-            // Data Rows
             List<User> users = getUsersForReport(userId);
             Font redFont = FontFactory.getFont(FontFactory.HELVETICA, 11, Color.RED);
             Font greenFont = FontFactory.getFont(FontFactory.HELVETICA, 11, Color.GREEN);
@@ -144,7 +140,6 @@ public class ReportService {
 
             document.add(table);
 
-            // Summary
             document.add(new Paragraph(" "));
             Paragraph summary = new Paragraph("Report Generated Successfully",
                     FontFactory.getFont(FontFactory.HELVETICA_BOLD, 13));
@@ -154,7 +149,6 @@ public class ReportService {
             return out.toByteArray();
 
         } catch (Exception e) {
-            e.printStackTrace();
             throw new RuntimeException("Failed to generate contribution period report: " + e.getMessage(), e);
         }
     }
@@ -167,16 +161,15 @@ public class ReportService {
             if (opt.isPresent()) {
                 Contribution c = opt.get();
                 if (Boolean.TRUE.equals(c.isPaid())) {
-                    table.addCell(new Phrase("PAID", greenFont));
+                    table.addCell(new Phrase("✅ PAID", greenFont));
                 } else {
-                    table.addCell(new Phrase("UNPAID", redFont));
+                    table.addCell(new Phrase("⏳ UNPAID", redFont));
                 }
             } else {
-                // NOT GENERATED → Show as UNPAID (as per your request)
-                table.addCell(new Phrase("UNPAID", redFont));
+                table.addCell(new Phrase("⏳ UNPAID", redFont));
             }
         } catch (Exception e) {
-            table.addCell(new Phrase("UNPAID", redFont));
+            table.addCell(new Phrase("ERROR", redFont));
         }
     }
 
@@ -190,11 +183,96 @@ public class ReportService {
         return userRepository.findAll().stream()
                 .filter(User::isActive)
                 .filter(u -> !u.isDeleted())
-                .sorted(Comparator.comparing(User::getFullName))
+                .filter(u -> !"SUPER_ADMIN".equals(u.getRole()))   // Exclude admin
+                .sorted(Comparator.comparing(User::getUsername))   // Ordered by username ascending
                 .collect(Collectors.toList());
     }
 
-    // ===================== JSON DETAILS FOR SPECIFIC USER =====================
+    // ===================== HELPER =====================
+    private MonthlyFundReportDTO buildMonthlyReportData(YearMonth month) {
+        MonthlyFundReportDTO report = new MonthlyFundReportDTO();
+        report.setMonth(month);
+
+        List<TransactionResponse> transactions = transactionService.getMainFundTransactionsByMonth(month);
+
+        BigDecimal income = transactions.stream()
+                .filter(t -> "INCOME".equalsIgnoreCase(t.getType()))
+                .map(TransactionResponse::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal expense = transactions.stream()
+                .filter(t -> "EXPENSE".equalsIgnoreCase(t.getType()))
+                .map(TransactionResponse::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        report.setMonthlyIncome(income);
+        report.setMonthlyExpense(expense);
+        report.setNetBalance(income.subtract(expense));
+
+        List<ContributionResponse> paid = contributionService.getPaidContributionsByMonth(month).stream()
+                .filter(c -> !isSuperAdmin(c.getUserId()))
+                .collect(Collectors.toList());
+
+        report.setPaidContributions(paid);
+        report.setMonthlyContributions(paid.stream()
+                .map(ContributionResponse::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+
+        report.setUnpaidUsers(userService.getUnpaidUsersForMonth(month).stream()
+                .filter(u -> !"SUPER_ADMIN".equals(u.getRole()))
+                .collect(Collectors.toList()));
+
+        return report;
+    }
+
+    private boolean isSuperAdmin(String userId) {
+        return userRepository.findById(userId)
+                .map(user -> "SUPER_ADMIN".equals(user.getRole()))
+                .orElse(false);
+    }
+
+    private PdfPTable createPaidTable(List<ContributionResponse> paidList) {
+        PdfPTable table = new PdfPTable(4);
+        table.setWidthPercentage(100);
+        table.addCell(new Phrase("Username", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12)));
+        table.addCell(new Phrase("Full Name", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12)));
+        table.addCell(new Phrase("Month", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12)));
+        table.addCell(new Phrase("Amount", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12)));
+
+        for (ContributionResponse c : paidList) {
+            Optional<User> userOpt = userRepository.findById(c.getUserId());
+            String username = userOpt.map(User::getUsername).orElse("Unknown");
+            String fullName = userOpt.map(User::getFullName).orElse("Unknown");
+
+            table.addCell(username);
+            table.addCell(fullName);
+            table.addCell(c.getMonth() != null ? c.getMonth().toString() : "");
+            table.addCell(c.getAmount() != null ? c.getAmount().toString() : "0");
+        }
+        return table;
+    }
+
+    private PdfPTable createUnpaidTable(List<UserResponse> unpaidUsers) {
+        PdfPTable table = new PdfPTable(3);
+        table.setWidthPercentage(100);
+        table.addCell(new Phrase("Username", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12)));
+        table.addCell(new Phrase("Full Name", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12)));
+        table.addCell(new Phrase("Amount", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12)));
+
+        for (UserResponse user : unpaidUsers) {
+            table.addCell(user.getUsername() != null ? user.getUsername() : "");
+            table.addCell(user.getFullName() != null ? user.getFullName() : "");
+            table.addCell("0");
+        }
+        return table;
+    }
+
+    private void addTableRow(PdfPTable table, String label, String value) {
+        table.addCell(new Phrase(label, FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12)));
+        table.addCell(value);
+    }
+
+
     public List<UserContributionDetailDTO> getUserContributionDetails(
             String userId, YearMonth startMonth, YearMonth endMonth) {
 
@@ -222,85 +300,12 @@ public class ReportService {
             } else {
                 dto.setAmount(BigDecimal.ZERO);
                 dto.setPaid(false);
-                dto.setStatus("NOT GENERATED");
+                dto.setStatus("UNPAID");
             }
 
             details.add(dto);
             current = current.plusMonths(1);
         }
         return details;
-    }
-
-    // ===================== HELPER METHODS =====================
-    private MonthlyFundReportDTO buildMonthlyReportData(YearMonth month) {
-        MonthlyFundReportDTO report = new MonthlyFundReportDTO();
-        report.setMonth(month);
-
-        List<TransactionResponse> transactions = transactionService.getMainFundTransactionsByMonth(month);
-
-        BigDecimal income = transactions.stream()
-                .filter(t -> "INCOME".equalsIgnoreCase(t.getType()))
-                .map(TransactionResponse::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal expense = transactions.stream()
-                .filter(t -> "EXPENSE".equalsIgnoreCase(t.getType()))
-                .map(TransactionResponse::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        report.setMonthlyIncome(income);
-        report.setMonthlyExpense(expense);
-        report.setNetBalance(income.subtract(expense));
-
-        List<ContributionResponse> paid = contributionService.getPaidContributionsByMonth(month);
-        report.setPaidContributions(paid);
-        report.setMonthlyContributions(paid.stream()
-                .map(ContributionResponse::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
-
-        report.setUnpaidUsers(userService.getUnpaidUsersForMonth(month));
-
-        return report;
-    }
-
-    private PdfPTable createPaidTable(List<ContributionResponse> paidList) {
-        PdfPTable table = new PdfPTable(4);
-        table.setWidthPercentage(100);
-        table.addCell(new Phrase("Username", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12)));
-        table.addCell(new Phrase("Full Name", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12)));
-        table.addCell(new Phrase("Month", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12)));
-        table.addCell(new Phrase("Amount", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12)));
-
-        for (ContributionResponse c : paidList) {
-            Optional<User> userOpt = userRepository.findById(c.getUserId());
-            String username = userOpt.map(User::getUsername).orElse("Unknown");
-            String fullName = userOpt.map(User::getFullName).orElse("Unknown");
-
-            table.addCell(username);
-            table.addCell(fullName);
-            table.addCell(c.getMonth().toString());
-            table.addCell(c.getAmount() != null ? c.getAmount().toString() : "0");
-        }
-        return table;
-    }
-
-    private PdfPTable createUnpaidTable(List<UserResponse> unpaidUsers) {
-        PdfPTable table = new PdfPTable(3);
-        table.setWidthPercentage(100);
-        table.addCell(new Phrase("Username", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12)));
-        table.addCell(new Phrase("Full Name", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12)));
-        table.addCell(new Phrase("Amount", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12)));
-
-        for (UserResponse user : unpaidUsers) {
-            table.addCell(user.getUsername());
-            table.addCell(user.getFullName());
-            table.addCell("0");
-        }
-        return table;
-    }
-
-    private void addTableRow(PdfPTable table, String label, String value) {
-        table.addCell(new Phrase(label, FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12)));
-        table.addCell(value);
     }
 }

@@ -22,12 +22,16 @@ spring:
       ddl-auto: update
     show-sql: false
     open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect   # ← Add this line
+        format_sql: true
 
   # ==================== MAIL (Gmail SMTP) ====================
   mail:
     host: smtp.gmail.com
     port: 587
-    username: ${MAIL_USERNAME}
+    username: cst19treasurysystem@gmail.com
     password: ${MAIL_PASSWORD}
     properties:
       mail:

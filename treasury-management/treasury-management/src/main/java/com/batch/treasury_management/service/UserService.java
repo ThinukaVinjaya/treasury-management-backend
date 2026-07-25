@@ -30,7 +30,6 @@ public class UserService {
 
     @Transactional
     public User createUser(UserRequest request) {
-        // Username & Email uniqueness check
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new IllegalArgumentException("Username already exists: " + request.getUsername());
         }
@@ -38,14 +37,12 @@ public class UserService {
             throw new IllegalArgumentException("Email already exists: " + request.getEmail());
         }
 
-        // Role handling with default
         String role = (request.getRole() != null ? request.getRole().toUpperCase().trim() : "USER");
 
         if (!List.of("USER", "TREASURER", "SUPER_ADMIN").contains(role)) {
             throw new IllegalArgumentException("Invalid role. Allowed: USER, TREASURER, SUPER_ADMIN");
         }
 
-        // ✅ Allow only the FIRST SUPER_ADMIN (for DataInitializer)
         if ("SUPER_ADMIN".equals(role) && userRepository.count() > 0) {
             throw new IllegalArgumentException("Cannot create another SUPER_ADMIN user");
         }
@@ -132,8 +129,6 @@ public class UserService {
                 "Password reset for user: " + user.getUsername());
     }
 
-    // ==================== Forgot Password Flow ====================
-
     public String generateAndSendForgotPasswordOtp(String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + username));
@@ -176,8 +171,6 @@ public class UserService {
                 "Password reset successfully via OTP");
     }
 
-    // ==================== Helper Methods ====================
-
     private UserResponse mapToResponse(User user) {
         UserResponse response = new UserResponse();
         response.setId(user.getId());
@@ -192,10 +185,14 @@ public class UserService {
         return response;
     }
 
+    /**
+     * FIXED: Includes SUPER_ADMIN in unpaid list for reports
+     */
     public List<UserResponse> getUnpaidUsersForMonth(YearMonth month) {
         return userRepository.findAll().stream()
                 .filter(User::isActive)
-                .filter(user -> !user.isDeleted())
+                .filter(u -> !u.isDeleted())
+                // Include all users including SUPER_ADMIN
                 .filter(user -> !hasPaidForMonth(user.getId(), month))
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
