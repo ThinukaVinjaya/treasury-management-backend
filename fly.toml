@@ -1,10 +1,10 @@
-# fly.toml app configuration file generated for treasury-management-backend on 2026-07-25T05:48:05Z
+# fly.toml app configuration file generated for treasury-management-backend on 2026-07-25T06:05:05Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
 app = 'treasury-management-backend'
-primary_region = 'syd'
+primary_region = 'sin'
 
 [build]
 
