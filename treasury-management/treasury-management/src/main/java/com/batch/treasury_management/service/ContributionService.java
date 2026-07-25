@@ -136,7 +136,7 @@ public class ContributionService {
         txRequest.setAmount(contribution.getAmount());
         txRequest.setType("INCOME");
         txRequest.setCategory("CONTRIBUTION");
-        txRequest.setDescription("Payment from user");
+        txRequest.setDescription("Payment from user"+ contribution.getUserId());
         txRequest.setEventId(contribution.getEventId());
 
         TransactionResponse txResponse = transactionService.createTransaction(txRequest, null, performedBy);
